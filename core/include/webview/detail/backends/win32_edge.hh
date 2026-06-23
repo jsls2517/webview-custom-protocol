@@ -142,8 +142,14 @@ public:
       : m_scheme{scheme} {}
   virtual ~webview2_custom_scheme_registration() = default;
 
-  ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
-  ULONG STDMETHODCALLTYPE Release() override { return 1; }
+  ULONG STDMETHODCALLTYPE AddRef() override { return ++m_ref_count; }
+  ULONG STDMETHODCALLTYPE Release() override {
+    if (m_ref_count > 1) {
+      return --m_ref_count;
+    }
+    delete this;
+    return 0;
+  }
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv) override {
     if (!ppv)
       return E_POINTER;
@@ -198,6 +204,7 @@ public:
 
 private:
   std::wstring m_scheme;
+  std::atomic<ULONG> m_ref_count{1};
 };
 
 class webview2_environment_options : public ICoreWebView2EnvironmentOptions,
@@ -208,8 +215,14 @@ public:
   }
   virtual ~webview2_environment_options() { delete m_registration; }
 
-  ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
-  ULONG STDMETHODCALLTYPE Release() override { return 1; }
+  ULONG STDMETHODCALLTYPE AddRef() override { return ++m_ref_count; }
+  ULONG STDMETHODCALLTYPE Release() override {
+    if (m_ref_count > 1) {
+      return --m_ref_count;
+    }
+    delete this;
+    return 0;
+  }
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv) override {
     if (!ppv)
       return E_POINTER;
@@ -291,6 +304,7 @@ public:
 
 private:
   webview2_custom_scheme_registration *m_registration;
+  std::atomic<ULONG> m_ref_count{1};
 };
 
 class webview2_web_resource_requested_handler
@@ -301,8 +315,14 @@ public:
   webview2_web_resource_requested_handler(callback_fn cb) : m_cb{cb} {}
   virtual ~webview2_web_resource_requested_handler() = default;
 
-  ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
-  ULONG STDMETHODCALLTYPE Release() override { return 1; }
+  ULONG STDMETHODCALLTYPE AddRef() override { return ++m_ref_count; }
+  ULONG STDMETHODCALLTYPE Release() override {
+    if (m_ref_count > 1) {
+      return --m_ref_count;
+    }
+    delete this;
+    return 0;
+  }
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv) override {
     if (!ppv)
       return E_POINTER;
@@ -328,6 +348,7 @@ public:
 
 private:
   callback_fn m_cb;
+  std::atomic<ULONG> m_ref_count{1};
 };
 
 class webview2_com_handler
@@ -566,6 +587,13 @@ public:
   }
 
   virtual ~win32_edge_engine() {
+    // Unregister the app:// resource handler before releasing the webview so
+    // WebView2 cannot dispatch into a dangling callback during teardown.
+    if (m_webview && m_web_resource_handler) {
+      m_webview->remove_WebResourceRequested(m_web_resource_token);
+      m_web_resource_handler->Release();
+      m_web_resource_handler = nullptr;
+    }
     if (m_com_handler) {
       m_com_handler->Release();
       m_com_handler = nullptr;
@@ -693,6 +721,27 @@ protected:
     return window_show();
   }
 
+  // Registers the app:// resource filter and handler once the webview exists.
+  // Safe to call only after m_webview is set. The handler dispatches per host
+  // via the m_assets_mappings map, so a single broad filter suffices.
+  void register_app_resource_handler() {
+    if (!m_webview || m_web_resource_handler) {
+      return;
+    }
+    // A single filter covering the whole app:// scheme; the handler rejects
+    // unknown hosts and path-traversal attempts internally.
+    auto host = widen_string("app://*");
+    m_webview->AddWebResourceRequestedFilter(
+        host.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+    m_web_resource_handler = new webview2_web_resource_requested_handler(
+        [this](ICoreWebView2 *sender,
+               ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
+          return on_web_resource_requested(sender, args);
+        });
+    m_webview->add_WebResourceRequested(m_web_resource_handler,
+                                        &m_web_resource_token);
+  }
+
   HRESULT
   on_web_resource_requested(ICoreWebView2 *sender,
                             ICoreWebView2WebResourceRequestedEventArgs *args) {
@@ -796,21 +845,13 @@ protected:
 
   noresult set_assets_mapping_impl(const std::string &virtual_host,
                                    const std::string &folder_path) override {
-    if (!m_webview || !m_env) {
-      return error_info{WEBVIEW_ERROR_INVALID_STATE};
-    }
-    auto w_host = widen_string("app://" + virtual_host + "/*");
-    m_webview->AddWebResourceRequestedFilter(
-        w_host.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
-
-    EventRegistrationToken token;
-    auto handler = new webview2_web_resource_requested_handler(
-        [this](ICoreWebView2 *sender,
-               ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
-          return on_web_resource_requested(sender, args);
-        });
-    m_webview->add_WebResourceRequested(handler, &token);
-    handler->Release();
+    // The app:// resource filter and handler are registered once when the
+    // controller is created (see embed()). Here we only update the host->folder
+    // mapping, which the handler consults at request time. This keeps the
+    // contract identical across platforms: set_assets_mapping() can be called
+    // at any time, before or after navigate(), and simply updates the map.
+    (void)virtual_host;
+    (void)folder_path;
     return {};
   }
 
@@ -1151,6 +1192,11 @@ private:
           m_env = env;
           m_controller = controller;
           m_webview = webview;
+          // Register the app:// resource handler exactly once, now that the
+          // webview exists. The handler consults the host->folder map at
+          // request time, so set_assets_mapping() can be called before or
+          // after this point.
+          register_app_resource_handler();
           flag.clear();
         });
 
@@ -1304,6 +1350,8 @@ private:
   ICoreWebView2 *m_webview = nullptr;
   ICoreWebView2Controller *m_controller = nullptr;
   webview2_com_handler *m_com_handler = nullptr;
+  webview2_web_resource_requested_handler *m_web_resource_handler = nullptr;
+  EventRegistrationToken m_web_resource_token{};
   mswebview2::loader m_webview2_loader;
   int m_dpi{};
   bool m_is_window_shown{};
