@@ -26,10 +26,10 @@
 #ifndef WEBVIEW_API_H
 #define WEBVIEW_API_H
 
-#include <stdint.h>
 #include "errors.h"
 #include "macros.h"
 #include "types.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -200,9 +200,9 @@ WEBVIEW_API webview_error_t webview_set_assets_mapping(webview_t w,
  * @param b Blue component (0-255).
  * @param a Alpha component (0-255).
  */
-WEBVIEW_API webview_error_t webview_set_background_color(webview_t w,
-                                                         uint8_t r, uint8_t g,
-                                                         uint8_t b, uint8_t a);
+WEBVIEW_API webview_error_t webview_set_background_color(webview_t w, uint8_t r,
+                                                         uint8_t g, uint8_t b,
+                                                         uint8_t a);
 
 /**
  * Injects JavaScript code to be executed immediately upon loading a page.

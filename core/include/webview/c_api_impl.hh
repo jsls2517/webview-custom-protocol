@@ -198,9 +198,8 @@ WEBVIEW_API webview_error_t webview_set_html(webview_t w, const char *html) {
   return api_filter([=] { return cast_to_webview(w)->set_html(html); });
 }
 
-WEBVIEW_API webview_error_t webview_set_assets_mapping(webview_t w,
-                                                       const char *virtual_host,
-                                                       const char *folder_path) {
+WEBVIEW_API webview_error_t webview_set_assets_mapping(
+    webview_t w, const char *virtual_host, const char *folder_path) {
   using namespace webview::detail;
   if (!virtual_host || !folder_path) {
     return WEBVIEW_ERROR_INVALID_ARGUMENT;
@@ -210,13 +209,12 @@ WEBVIEW_API webview_error_t webview_set_assets_mapping(webview_t w,
   });
 }
 
-WEBVIEW_API webview_error_t webview_set_background_color(webview_t w,
-                                                         uint8_t r, uint8_t g,
-                                                         uint8_t b, uint8_t a) {
+WEBVIEW_API webview_error_t webview_set_background_color(webview_t w, uint8_t r,
+                                                         uint8_t g, uint8_t b,
+                                                         uint8_t a) {
   using namespace webview::detail;
-  return api_filter([=] {
-    return cast_to_webview(w)->set_background_color(r, g, b, a);
-  });
+  return api_filter(
+      [=] { return cast_to_webview(w)->set_background_color(r, g, b, a); });
 }
 
 WEBVIEW_API webview_error_t webview_init(webview_t w, const char *js) {

@@ -67,6 +67,7 @@ if(WEBVIEW_BUILD_AMALGAMATION)
 
             add_custom_command(
                 OUTPUT "${AMALGAMATION_STAMP_FILE}"
+                COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/amalgamation"
                 COMMAND "${CMAKE_COMMAND}" -E touch "${AMALGAMATION_STAMP_FILE}"
                 COMMAND ${Python3_EXECUTABLE}
                     "${PROJECT_SOURCE_DIR}/scripts/amalgamate/amalgamate.py"

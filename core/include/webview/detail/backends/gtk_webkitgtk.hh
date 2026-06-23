@@ -53,11 +53,13 @@
 #include "../platform/linux/webkitgtk/dmabuf.hh"
 #include "../user_script.hh"
 
+#include <cstring>
 #include <fstream>
 #include <functional>
 #include <list>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <gtk/gtk.h>
 
@@ -312,7 +314,8 @@ private:
     m_webview = webkit_web_view_new();
     g_object_ref_sink(m_webview);
 
-    WebKitWebContext *context = webkit_web_view_get_context(WEBKIT_WEB_VIEW(m_webview));
+    WebKitWebContext *context =
+        webkit_web_view_get_context(WEBKIT_WEB_VIEW(m_webview));
     webkit_web_context_register_uri_scheme(
         context, "app",
         +[](WebKitURISchemeRequest *request, gpointer arg) {
@@ -335,50 +338,36 @@ private:
 }");
   }
 
-  static std::string get_mime_type(const std::string &path) {
-    auto dot = path.find_last_of('.');
-    if (dot == std::string::npos) return "application/octet-stream";
-    std::string ext = path.substr(dot + 1);
-    if (ext == "html" || ext == "htm") return "text/html";
-    if (ext == "css") return "text/css";
-    if (ext == "js") return "application/javascript";
-    if (ext == "json") return "application/json";
-    if (ext == "png") return "image/png";
-    if (ext == "jpg" || ext == "jpeg") return "image/jpeg";
-    if (ext == "gif") return "image/gif";
-    if (ext == "svg") return "image/svg+xml";
-    if (ext == "ico") return "image/x-icon";
-    return "application/octet-stream";
-  }
-
   void on_uri_scheme_request(WebKitURISchemeRequest *request) {
     std::string uri = webkit_uri_scheme_request_get_uri(request);
     std::string prefix = "app://";
     if (uri.rfind(prefix, 0) == 0) {
       std::string remain = uri.substr(prefix.length());
       auto slash = remain.find('/');
-      std::string host = (slash == std::string::npos) ? remain : remain.substr(0, slash);
-      std::string path = (slash == std::string::npos) ? "" : remain.substr(slash);
-      
+      std::string host =
+          (slash == std::string::npos) ? remain : remain.substr(0, slash);
+      std::string path =
+          (slash == std::string::npos) ? "" : remain.substr(slash);
+
       if (!m_virtual_host.empty() && host == m_virtual_host) {
         if (path.empty() || path == "/") {
           path = "/index.html";
         }
         std::string full_path = m_assets_folder + path;
-        
+
         std::ifstream file(full_path, std::ios::binary);
         if (file) {
           std::vector<char> buffer((std::istreambuf_iterator<char>(file)),
                                    std::istreambuf_iterator<char>());
-          
-          std::string mime_type = get_mime_type(path);
-          
+
+          std::string mime_type = detail::get_mime_type(path);
+
           void *data = g_malloc(buffer.size());
           std::memcpy(data, buffer.data(), buffer.size());
           GBytes *bytes = g_bytes_new_take(data, buffer.size());
           GInputStream *stream = g_memory_input_stream_new_from_bytes(bytes);
           g_bytes_unref(bytes);
-          
+
           webkit_uri_scheme_request_finish(request, stream, buffer.size(),
                                            mime_type.c_str());
           g_object_unref(stream);
@@ -386,7 +375,7 @@ private:
         }
       }
     }
-    
+
     GInputStream *stream = g_memory_input_stream_new();
     webkit_uri_scheme_request_finish(request, stream, 0, "text/plain");
     g_object_unref(stream);

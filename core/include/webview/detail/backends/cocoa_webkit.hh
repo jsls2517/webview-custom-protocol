@@ -50,11 +50,11 @@
 #include "../user_script.hh"
 
 #include <atomic>
+#include <fstream>
 #include <functional>
 #include <list>
 #include <memory>
 #include <string>
-#include <fstream>
 #include <vector>
 
 #include <objc/objc-runtime.h>
@@ -230,22 +230,26 @@ protected:
     double blue = b / 255.0;
     double alpha = a / 255.0;
 
-    id color = objc::msg_send<id>(objc::get_class("NSColor"),
-                                  objc::selector("colorWithCalibratedRed:green:blue:alpha:"),
-                                  red, green, blue, alpha);
+    id color = objc::msg_send<id>(
+        objc::get_class("NSColor"),
+        objc::selector("colorWithCalibratedRed:green:blue:alpha:"), red, green,
+        blue, alpha);
 
-    objc::msg_send<void>(m_webview, objc::selector("setBackgroundColor:"), color);
-    
+    objc::msg_send<void>(m_webview, objc::selector("setBackgroundColor:"),
+                         color);
+
     if (objc_lookUpClass("WKWebView")) {
       SEL under_page_sel = objc::selector("setUnderPageBackgroundColor:");
-      if (objc::msg_send<BOOL>(m_webview, objc::selector("respondsToSelector:"), under_page_sel)) {
+      if (objc::msg_send<BOOL>(m_webview, objc::selector("respondsToSelector:"),
+                               under_page_sel)) {
         objc::msg_send<void>(m_webview, under_page_sel, color);
       }
-      
-      id false_value = objc::msg_send<id>(objc::get_class("NSNumber"),
-                                          objc::selector("numberWithBool:"), NO);
+
+      id false_value = objc::msg_send<id>(
+          objc::get_class("NSNumber"), objc::selector("numberWithBool:"), NO);
       objc::msg_send<void>(m_webview, objc::selector("setValue:forKey:"),
-                            false_value, NSString_stringWithUTF8String("drawsBackground"));
+                           false_value,
+                           NSString_stringWithUTF8String("drawsBackground"));
     }
 
     if (m_widget) {
@@ -253,14 +257,16 @@ protected:
       id layer = objc::msg_send<id>(m_widget, objc::selector("layer"));
       if (layer) {
         id cg_color = objc::msg_send<id>(color, objc::selector("CGColor"));
-        objc::msg_send<void>(layer, objc::selector("setBackgroundColor:"), cg_color);
+        objc::msg_send<void>(layer, objc::selector("setBackgroundColor:"),
+                             cg_color);
       }
     }
 
     objc::msg_send<void>(m_webview, objc::selector("setOpaque:"), NO);
 
     if (m_window) {
-      objc::msg_send<void>(m_window, objc::selector("setBackgroundColor:"), color);
+      objc::msg_send<void>(m_window, objc::selector("setBackgroundColor:"),
+                           color);
     }
     return {};
   }
@@ -351,21 +357,7 @@ private:
     }
     return objc::Class_new(cls);
   }
-  static std::string get_mime_type(const std::string &path) {
-    auto dot = path.find_last_of('.');
-    if (dot == std::string::npos) return "application/octet-stream";
-    std::string ext = path.substr(dot + 1);
-    if (ext == "html" || ext == "htm") return "text/html";
-    if (ext == "css") return "text/css";
-    if (ext == "js") return "application/javascript";
-    if (ext == "json") return "application/json";
-    if (ext == "png") return "image/png";
-    if (ext == "jpg" || ext == "jpeg") return "image/jpeg";
-    if (ext == "gif") return "image/gif";
-    if (ext == "svg") return "image/svg+xml";
-    if (ext == "ico") return "image/x-icon";
-    return "application/octet-stream";
-  }
+
   id create_url_scheme_handler() {
     objc::autoreleasepool arp;
     constexpr auto class_name = "WebviewWKURLSchemeHandler";
@@ -373,19 +365,18 @@ private:
     if (!cls) {
       cls = objc_allocateClassPair(objc::get_class("NSObject"), class_name, 0);
       class_addProtocol(cls, objc_getProtocol("WKURLSchemeHandler"));
-      class_addMethod(
-          cls, objc::selector("webView:startURLSchemeTask:"),
-          (IMP)(+[](id self, SEL, id, id task) {
-            auto w = static_cast<cocoa_wkwebview_engine*>(get_associated_webview(self));
-            w->on_url_scheme_task_start(task);
-          }),
-          "v@:@@");
-      class_addMethod(
-          cls, objc::selector("webView:stopURLSchemeTask:"),
-          (IMP)(+[](id, SEL, id, id) {
-            // Nothing to do
-          }),
-          "v@:@@");
+      class_addMethod(cls, objc::selector("webView:startURLSchemeTask:"),
+                      (IMP)(+[](id self, SEL, id, id task) {
+                        auto w = static_cast<cocoa_wkwebview_engine *>(
+                            get_associated_webview(self));
+                        w->on_url_scheme_task_start(task);
+                      }),
+                      "v@:@@");
+      class_addMethod(cls, objc::selector("webView:stopURLSchemeTask:"),
+                      (IMP)(+[](id, SEL, id, id) {
+                        // Nothing to do
+                      }),
+                      "v@:@@");
       objc_registerClassPair(cls);
     }
     auto instance{objc::Class_new(cls)};
@@ -398,42 +389,52 @@ private:
     id url = objc::msg_send<id>(request, objc::selector("URL"));
     id host_ns = objc::msg_send<id>(url, objc::selector("host"));
     id path_ns = objc::msg_send<id>(url, objc::selector("path"));
-    
+
     std::string host = host_ns ? NSString_get_UTF8String(host_ns) : "";
     std::string path = path_ns ? NSString_get_UTF8String(path_ns) : "";
-    
+
     if (!m_virtual_host.empty() && host == m_virtual_host) {
       if (path.empty() || path == "/") {
         path = "/index.html";
       }
       std::string full_path = m_assets_folder + path;
-      
+
       std::ifstream file(full_path, std::ios::binary);
       if (file) {
         std::vector<char> buffer((std::istreambuf_iterator<char>(file)),
                                  std::istreambuf_iterator<char>());
-        
-        std::string mime_type = get_mime_type(path);
-        
+
+        std::string mime_type = detail::get_mime_type(path);
+
         id mime_ns = NSString_stringWithUTF8String(mime_type.c_str());
-        id response = objc::msg_send<id>(objc::get_class("NSURLResponse"), objc::selector("alloc"));
-        response = objc::msg_send<id>(response, objc::selector("initWithURL:MIMEType:expectedContentLength:textEncodingName:"),
-                                      url, mime_ns, buffer.size(), nullptr);
-        
-        objc::msg_send<void>(task, objc::selector("didReceiveResponse:"), response);
+        id response = objc::msg_send<id>(objc::get_class("NSURLResponse"),
+                                         objc::selector("alloc"));
+        response = objc::msg_send<id>(
+            response,
+            objc::selector(
+                "initWithURL:MIMEType:expectedContentLength:textEncodingName:"),
+            url, mime_ns, buffer.size(), nullptr);
+
+        objc::msg_send<void>(task, objc::selector("didReceiveResponse:"),
+                             response);
         objc::release(response);
-        
-        id data = objc::msg_send<id>(objc::get_class("NSData"), objc::selector("dataWithBytes:length:"), buffer.data(), buffer.size());
+
+        id data = objc::msg_send<id>(objc::get_class("NSData"),
+                                     objc::selector("dataWithBytes:length:"),
+                                     buffer.data(), buffer.size());
         objc::msg_send<void>(task, objc::selector("didReceiveData:"), data);
-        
+
         objc::msg_send<void>(task, objc::selector("didFinish"));
         return;
       }
     }
-    
-    id response = objc::msg_send<id>(objc::get_class("NSHTTPURLResponse"), objc::selector("alloc"));
-    response = objc::msg_send<id>(response, objc::selector("initWithURL:statusCode:HTTPVersion:headerFields:"),
-                                  url, 404, nullptr, nullptr);
+
+    id response = objc::msg_send<id>(objc::get_class("NSHTTPURLResponse"),
+                                     objc::selector("alloc"));
+    response = objc::msg_send<id>(
+        response,
+        objc::selector("initWithURL:statusCode:HTTPVersion:headerFields:"), url,
+        404, nullptr, nullptr);
     objc::msg_send<void>(task, objc::selector("didReceiveResponse:"), response);
     objc::release(response);
     objc::msg_send<void>(task, objc::selector("didFinish"));
@@ -622,8 +623,9 @@ private:
 #endif
 
     auto handler = objc::autorelease(create_url_scheme_handler());
-    objc::msg_send<void>(config, objc::selector("setURLSchemeHandler:forURLScheme:"),
-                          handler, NSString_stringWithUTF8String("app"));
+    objc::msg_send<void>(config,
+                         objc::selector("setURLSchemeHandler:forURLScheme:"),
+                         handler, NSString_stringWithUTF8String("app"));
 
     auto ui_delegate = create_webkit_ui_delegate();
     m_webview =

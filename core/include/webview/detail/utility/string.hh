@@ -92,6 +92,36 @@ inline std::string narrow_string(const std::wstring &input) {
 }
 #endif
 
+inline std::string get_mime_type(const std::string &path) {
+  auto dot = path.find_last_of('.');
+  if (dot == std::string::npos) {
+    return "application/octet-stream";
+  }
+  std::string ext = path.substr(dot + 1);
+  for (auto &c : ext) {
+    c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+  }
+  if (ext == "html" || ext == "htm")
+    return "text/html";
+  if (ext == "css")
+    return "text/css";
+  if (ext == "js")
+    return "application/javascript";
+  if (ext == "json")
+    return "application/json";
+  if (ext == "png")
+    return "image/png";
+  if (ext == "jpg" || ext == "jpeg")
+    return "image/jpeg";
+  if (ext == "gif")
+    return "image/gif";
+  if (ext == "svg")
+    return "image/svg+xml";
+  if (ext == "ico")
+    return "image/x-icon";
+  return "application/octet-stream";
+}
+
 } // namespace detail
 } // namespace webview
 

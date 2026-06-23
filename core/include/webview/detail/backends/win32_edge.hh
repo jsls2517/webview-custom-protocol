@@ -57,13 +57,13 @@
 
 #include <atomic>
 #include <cstdlib>
-#include <functional>
-#include <string>
 #include <fstream>
-#include <vector>
+#include <functional>
 #include <list>
 #include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -83,73 +83,135 @@
 #pragma comment(lib, "version.lib")
 #endif
 
+#ifndef __ICoreWebView2CustomSchemeRegistration_INTERFACE_DEFINED__
+#define __ICoreWebView2CustomSchemeRegistration_INTERFACE_DEFINED__
+interface ICoreWebView2CustomSchemeRegistration : public IUnknown {
+  virtual HRESULT STDMETHODCALLTYPE get_CustomSchemeName(LPOLESTR *
+                                                         schemeName) = 0;
+  virtual HRESULT STDMETHODCALLTYPE get_TreatAsSecure(BOOL * treatAsSecure) = 0;
+  virtual HRESULT STDMETHODCALLTYPE put_TreatAsSecure(BOOL treatAsSecure) = 0;
+  virtual HRESULT STDMETHODCALLTYPE GetAllowedOrigins(
+      UINT32 * allowedOriginsCount, LPOLESTR * *allowedOrigins) = 0;
+  virtual HRESULT STDMETHODCALLTYPE SetAllowedOrigins(
+      UINT32 allowedOriginsCount, LPOLESTR * allowedOrigins) = 0;
+  virtual HRESULT STDMETHODCALLTYPE get_HasAuthorityComponent(
+      BOOL * hasAuthorityComponent) = 0;
+  virtual HRESULT STDMETHODCALLTYPE put_HasAuthorityComponent(
+      BOOL hasAuthorityComponent) = 0;
+};
+#endif
+
+#ifndef __ICoreWebView2EnvironmentOptions4_INTERFACE_DEFINED__
+#define __ICoreWebView2EnvironmentOptions4_INTERFACE_DEFINED__
+interface ICoreWebView2EnvironmentOptions4 : public IUnknown {
+  virtual HRESULT STDMETHODCALLTYPE GetCustomSchemeRegistrations(
+      UINT32 * count,
+      ICoreWebView2CustomSchemeRegistration * **schemeRegistrations) = 0;
+  virtual HRESULT STDMETHODCALLTYPE SetCustomSchemeRegistrations(
+      UINT32 count,
+      ICoreWebView2CustomSchemeRegistration * *schemeRegistrations) = 0;
+};
+#endif
+
+#ifndef __ICoreWebView2EnvironmentOptions_INTERFACE_DEFINED__
+#define __ICoreWebView2EnvironmentOptions_INTERFACE_DEFINED__
+// clang-format off
+interface ICoreWebView2EnvironmentOptions : public IUnknown {
+  virtual HRESULT STDMETHODCALLTYPE get_AdditionalBrowserArguments(LPOLESTR *value) = 0;
+  virtual HRESULT STDMETHODCALLTYPE put_AdditionalBrowserArguments(LPCWSTR value) = 0;
+  virtual HRESULT STDMETHODCALLTYPE get_Language(LPOLESTR *value) = 0;
+  virtual HRESULT STDMETHODCALLTYPE put_Language(LPCWSTR value) = 0;
+  virtual HRESULT STDMETHODCALLTYPE get_TargetCompatibleBrowserVersion(LPOLESTR *value) = 0;
+  virtual HRESULT STDMETHODCALLTYPE put_TargetCompatibleBrowserVersion(LPCWSTR value) = 0;
+  virtual HRESULT STDMETHODCALLTYPE get_AllowSingleSignOnUsingOSPrimaryAccount(BOOL *value) = 0;
+  virtual HRESULT STDMETHODCALLTYPE put_AllowSingleSignOnUsingOSPrimaryAccount(BOOL value) = 0;
+};
+// clang-format on
+#endif
+
 namespace webview {
 namespace detail {
 
 using msg_cb_t = std::function<void(const std::string)>;
 
-class webview2_custom_scheme_registration : public ICoreWebView2CustomSchemeRegistration {
+class webview2_custom_scheme_registration
+    : public ICoreWebView2CustomSchemeRegistration {
 public:
-  webview2_custom_scheme_registration(const std::wstring &scheme) : m_scheme{scheme} {}
+  webview2_custom_scheme_registration(const std::wstring &scheme)
+      : m_scheme{scheme} {}
   virtual ~webview2_custom_scheme_registration() = default;
 
   ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
   ULONG STDMETHODCALLTYPE Release() override { return 1; }
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv) override {
-    if (!ppv) return E_POINTER;
+    if (!ppv)
+      return E_POINTER;
     static constexpr IID IID_ICoreWebView2CustomSchemeRegistration{
         0xd6696b4f,
         0xaf89,
         0x4b2e,
         {0x9d, 0x2e, 0xc9, 0xb5, 0xfd, 0xe7, 0xf6, 0x8c}};
-    if (IsEqualIID(riid, IID_IUnknown) || IsEqualIID(riid, IID_ICoreWebView2CustomSchemeRegistration)) {
-      *ppv = static_cast<ICoreWebView2CustomSchemeRegistration*>(this);
+    if (IsEqualIID(riid, IID_IUnknown) ||
+        IsEqualIID(riid, IID_ICoreWebView2CustomSchemeRegistration)) {
+      *ppv = static_cast<ICoreWebView2CustomSchemeRegistration *>(this);
       return S_OK;
     }
     *ppv = nullptr;
     return E_NOINTERFACE;
   }
 
-  HRESULT STDMETHODCALLTYPE get_CustomSchemeName(LPOLESTR *schemeName) override {
-    if (!schemeName) return E_POINTER;
-    *schemeName = (LPOLESTR)CoTaskMemAlloc((m_scheme.length() + 1) * sizeof(wchar_t));
+  HRESULT STDMETHODCALLTYPE
+  get_CustomSchemeName(LPOLESTR *schemeName) override {
+    if (!schemeName)
+      return E_POINTER;
+    *schemeName =
+        (LPOLESTR)CoTaskMemAlloc((m_scheme.length() + 1) * sizeof(wchar_t));
     wcscpy(*schemeName, m_scheme.c_str());
     return S_OK;
   }
-  
+
   HRESULT STDMETHODCALLTYPE get_TreatAsSecure(BOOL *treatAsSecure) override {
-    if (treatAsSecure) *treatAsSecure = TRUE;
+    if (treatAsSecure)
+      *treatAsSecure = TRUE;
     return S_OK;
   }
   HRESULT STDMETHODCALLTYPE put_TreatAsSecure(BOOL) override { return S_OK; }
-  HRESULT STDMETHODCALLTYPE GetAllowedOrigins(UINT32 *count, LPOLESTR **) override {
-    if (count) *count = 0;
+  HRESULT STDMETHODCALLTYPE GetAllowedOrigins(UINT32 *count,
+                                              LPOLESTR **) override {
+    if (count)
+      *count = 0;
     return S_OK;
   }
-  HRESULT STDMETHODCALLTYPE SetAllowedOrigins(UINT32, LPOLESTR *) override { return S_OK; }
-  HRESULT STDMETHODCALLTYPE get_HasAuthorityComponent(BOOL *hasAuthority) override {
-    if (hasAuthority) *hasAuthority = TRUE;
+  HRESULT STDMETHODCALLTYPE SetAllowedOrigins(UINT32, LPOLESTR *) override {
     return S_OK;
   }
-  HRESULT STDMETHODCALLTYPE put_HasAuthorityComponent(BOOL) override { return S_OK; }
+  HRESULT STDMETHODCALLTYPE
+  get_HasAuthorityComponent(BOOL *hasAuthority) override {
+    if (hasAuthority)
+      *hasAuthority = TRUE;
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE put_HasAuthorityComponent(BOOL) override {
+    return S_OK;
+  }
 
 private:
   std::wstring m_scheme;
 };
 
-class webview2_environment_options : public ICoreWebView2EnvironmentOptions4 {
+class webview2_environment_options : public ICoreWebView2EnvironmentOptions,
+                                     public ICoreWebView2EnvironmentOptions4 {
 public:
   webview2_environment_options() {
     m_registration = new webview2_custom_scheme_registration(L"app");
   }
-  virtual ~webview2_environment_options() {
-    delete m_registration;
-  }
+  virtual ~webview2_environment_options() { delete m_registration; }
 
   ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
   ULONG STDMETHODCALLTYPE Release() override { return 1; }
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv) override {
-    if (!ppv) return E_POINTER;
+    if (!ppv)
+      return E_POINTER;
     static constexpr IID IID_ICoreWebView2EnvironmentOptions{
         0x2fde08a8,
         0x1e9a,
@@ -161,20 +223,25 @@ public:
         0x47d0,
         {0x85, 0xd9, 0xda, 0x2d, 0x47, 0xaa, 0x2c, 0x76}};
     if (IsEqualIID(riid, IID_IUnknown) ||
-        IsEqualIID(riid, IID_ICoreWebView2EnvironmentOptions) ||
-        IsEqualIID(riid, IID_ICoreWebView2EnvironmentOptions4)) {
-      *ppv = static_cast<ICoreWebView2EnvironmentOptions4*>(this);
-      return S_OK;
+        IsEqualIID(riid, IID_ICoreWebView2EnvironmentOptions)) {
+      *ppv = static_cast<ICoreWebView2EnvironmentOptions *>(this);
+    } else if (IsEqualIID(riid, IID_ICoreWebView2EnvironmentOptions4)) {
+      *ppv = static_cast<ICoreWebView2EnvironmentOptions4 *>(this);
+    } else {
+      *ppv = nullptr;
+      return E_NOINTERFACE;
     }
-    *ppv = nullptr;
-    return E_NOINTERFACE;
+    return S_OK;
   }
 
   HRESULT STDMETHODCALLTYPE GetCustomSchemeRegistrations(
-      UINT32 *count, ICoreWebView2CustomSchemeRegistration ***schemeRegistrations) override {
-    if (!count || !schemeRegistrations) return E_POINTER;
+      UINT32 *count,
+      ICoreWebView2CustomSchemeRegistration ***schemeRegistrations) override {
+    if (!count || !schemeRegistrations)
+      return E_POINTER;
     *count = 1;
-    auto arr = (ICoreWebView2CustomSchemeRegistration**)CoTaskMemAlloc(sizeof(ICoreWebView2CustomSchemeRegistration*));
+    auto arr = (ICoreWebView2CustomSchemeRegistration **)CoTaskMemAlloc(
+        sizeof(ICoreWebView2CustomSchemeRegistration *));
     arr[0] = m_registration;
     *schemeRegistrations = arr;
     return S_OK;
@@ -185,34 +252,76 @@ public:
     return S_OK;
   }
 
+  HRESULT STDMETHODCALLTYPE
+  get_AdditionalBrowserArguments(LPOLESTR *value) override {
+    if (value)
+      *value = nullptr;
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE put_AdditionalBrowserArguments(LPCWSTR) override {
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE get_Language(LPOLESTR *value) override {
+    if (value)
+      *value = nullptr;
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE put_Language(LPCWSTR) override { return S_OK; }
+  HRESULT STDMETHODCALLTYPE
+  get_TargetCompatibleBrowserVersion(LPOLESTR *value) override {
+    if (value)
+      *value = nullptr;
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE
+  put_TargetCompatibleBrowserVersion(LPCWSTR) override {
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE
+  get_AllowSingleSignOnUsingOSPrimaryAccount(BOOL *value) override {
+    if (value)
+      *value = FALSE;
+    return S_OK;
+  }
+  HRESULT STDMETHODCALLTYPE
+  put_AllowSingleSignOnUsingOSPrimaryAccount(BOOL) override {
+    return S_OK;
+  }
+
 private:
   webview2_custom_scheme_registration *m_registration;
 };
 
-class webview2_web_resource_requested_handler : public ICoreWebView2WebResourceRequestedEventHandler {
+class webview2_web_resource_requested_handler
+    : public ICoreWebView2WebResourceRequestedEventHandler {
 public:
-  using callback_fn = std::function<HRESULT(ICoreWebView2 *sender, ICoreWebView2WebResourceRequestedEventArgs *args)>;
+  using callback_fn = std::function<HRESULT(
+      ICoreWebView2 *sender, ICoreWebView2WebResourceRequestedEventArgs *args)>;
   webview2_web_resource_requested_handler(callback_fn cb) : m_cb{cb} {}
   virtual ~webview2_web_resource_requested_handler() = default;
-  
+
   ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
   ULONG STDMETHODCALLTYPE Release() override { return 1; }
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv) override {
-    if (!ppv) return E_POINTER;
+    if (!ppv)
+      return E_POINTER;
     static constexpr IID IID_ICoreWebView2WebResourceRequestedEventHandler{
         0xab00b674,
         0xb385,
         0x4e62,
         {0x80, 0x8c, 0xa5, 0x6e, 0xbe, 0x4d, 0x6e, 0x48}};
-    if (IsEqualIID(riid, IID_IUnknown) || IsEqualIID(riid, IID_ICoreWebView2WebResourceRequestedEventHandler)) {
-      *ppv = static_cast<ICoreWebView2WebResourceRequestedEventHandler*>(this);
+    if (IsEqualIID(riid, IID_IUnknown) ||
+        IsEqualIID(riid, IID_ICoreWebView2WebResourceRequestedEventHandler)) {
+      *ppv = static_cast<ICoreWebView2WebResourceRequestedEventHandler *>(this);
       return S_OK;
     }
     *ppv = nullptr;
     return E_NOINTERFACE;
   }
 
-  HRESULT STDMETHODCALLTYPE Invoke(ICoreWebView2 *sender, ICoreWebView2WebResourceRequestedEventArgs *args) override {
+  HRESULT STDMETHODCALLTYPE
+  Invoke(ICoreWebView2 *sender,
+         ICoreWebView2WebResourceRequestedEventArgs *args) override {
     return m_cb(sender, args);
   }
 
@@ -226,7 +335,8 @@ class webview2_com_handler
       public ICoreWebView2WebMessageReceivedEventHandler,
       public ICoreWebView2PermissionRequestedEventHandler {
   using webview2_com_handler_cb_t =
-      std::function<void(ICoreWebView2Environment *, ICoreWebView2Controller *, ICoreWebView2 *webview)>;
+      std::function<void(ICoreWebView2Environment *, ICoreWebView2Controller *,
+                         ICoreWebView2 *webview)>;
 
 public:
   webview2_com_handler(HWND hwnd, msg_cb_t msgCb, webview2_com_handler_cb_t cb)
@@ -582,26 +692,13 @@ protected:
     return window_show();
   }
 
-  static std::string get_mime_type(const std::string &path) {
-    auto dot = path.find_last_of('.');
-    if (dot == std::string::npos) return "application/octet-stream";
-    std::string ext = path.substr(dot + 1);
-    if (ext == "html" || ext == "htm") return "text/html";
-    if (ext == "css") return "text/css";
-    if (ext == "js") return "application/javascript";
-    if (ext == "json") return "application/json";
-    if (ext == "png") return "image/png";
-    if (ext == "jpg" || ext == "jpeg") return "image/jpeg";
-    if (ext == "gif") return "image/gif";
-    if (ext == "svg") return "image/svg+xml";
-    if (ext == "ico") return "image/x-icon";
-    return "application/octet-stream";
-  }
-
-  HRESULT on_web_resource_requested(ICoreWebView2 *sender, ICoreWebView2WebResourceRequestedEventArgs *args) {
+  HRESULT
+  on_web_resource_requested(ICoreWebView2 *sender,
+                            ICoreWebView2WebResourceRequestedEventArgs *args) {
     ICoreWebView2WebResourceRequest *request = nullptr;
     args->get_Request(&request);
-    if (!request) return S_OK;
+    if (!request)
+      return S_OK;
 
     LPWSTR uri_raw = nullptr;
     request->get_Uri(&uri_raw);
@@ -613,22 +710,24 @@ protected:
     if (uri.rfind(prefix, 0) == 0) {
       std::string remain = uri.substr(prefix.length());
       auto slash = remain.find('/');
-      std::string host = (slash == std::string::npos) ? remain : remain.substr(0, slash);
-      std::string path = (slash == std::string::npos) ? "" : remain.substr(slash);
+      std::string host =
+          (slash == std::string::npos) ? remain : remain.substr(0, slash);
+      std::string path =
+          (slash == std::string::npos) ? "" : remain.substr(slash);
 
       if (!m_virtual_host.empty() && host == m_virtual_host) {
         if (path.empty() || path == "/") {
           path = "/index.html";
         }
         std::string full_path = m_assets_folder + path;
-        
+
         std::ifstream file(full_path, std::ios::binary);
         if (file) {
           std::vector<char> buffer((std::istreambuf_iterator<char>(file)),
                                    std::istreambuf_iterator<char>());
-          
+
           std::string mime_type = get_mime_type(path);
-          
+
           IStream *stream = nullptr;
           HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, buffer.size());
           if (hGlob) {
@@ -643,12 +742,11 @@ protected:
           if (stream) {
             ICoreWebView2WebResourceResponse *response = nullptr;
             auto w_mime = widen_string(mime_type);
-            
+
             HRESULT hr = m_env->CreateWebResourceResponse(
-                stream, 200, L"OK",
-                (L"Content-Type: " + w_mime).c_str(),
+                stream, 200, L"OK", (L"Content-Type: " + w_mime).c_str(),
                 &response);
-            
+
             if (SUCCEEDED(hr) && response) {
               args->put_Response(response);
               response->Release();
@@ -663,9 +761,7 @@ protected:
 
     ICoreWebView2WebResourceResponse *response = nullptr;
     HRESULT hr = m_env->CreateWebResourceResponse(
-        nullptr, 404, L"Not Found",
-        L"Content-Type: text/plain",
-        &response);
+        nullptr, 404, L"Not Found", L"Content-Type: text/plain", &response);
     if (SUCCEEDED(hr) && response) {
       args->put_Response(response);
       response->Release();
@@ -687,7 +783,8 @@ protected:
         0x48C1,
         {0x95, 0xC3, 0xD0, 0xCE, 0x7E, 0xF9, 0x1E, 0xBB}};
     ICoreWebView2Controller2 *controller2 = nullptr;
-    HRESULT hr = m_controller->QueryInterface(IID_ICoreWebView2Controller2, (void **)&controller2);
+    HRESULT hr = m_controller->QueryInterface(IID_ICoreWebView2Controller2,
+                                              (void **)&controller2);
     if (SUCCEEDED(hr)) {
       COREWEBVIEW2_COLOR color;
       color.R = r;
@@ -698,7 +795,7 @@ protected:
       controller2->Release();
       return {};
     }
-    return error_info{WEBVIEW_ERROR_UNSUPPORTED};
+    return error_info{WEBVIEW_ERROR_UNSPECIFIED};
   }
 
   noresult set_assets_mapping_impl(const std::string &virtual_host,
@@ -707,11 +804,13 @@ protected:
       return error_info{WEBVIEW_ERROR_INVALID_STATE};
     }
     auto w_host = widen_string("app://" + virtual_host + "/*");
-    m_webview->AddWebResourceRequestedFilter(w_host.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
-    
+    m_webview->AddWebResourceRequestedFilter(
+        w_host.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+
     EventRegistrationToken token;
     auto handler = new webview2_web_resource_requested_handler(
-        [this](ICoreWebView2 *sender, ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
+        [this](ICoreWebView2 *sender,
+               ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
           return on_web_resource_requested(sender, args);
         });
     m_webview->add_WebResourceRequested(handler, &token);
@@ -1044,7 +1143,8 @@ private:
 
     m_com_handler = new webview2_com_handler(
         wnd, cb,
-        [&](ICoreWebView2Environment *env, ICoreWebView2Controller *controller, ICoreWebView2 *webview) {
+        [&](ICoreWebView2Environment *env, ICoreWebView2Controller *controller,
+            ICoreWebView2 *webview) {
           if (!env || !controller || !webview) {
             flag.clear();
             return;
@@ -1058,10 +1158,19 @@ private:
           flag.clear();
         });
 
+    webview2_environment_options options;
+    bool use_options = true;
     m_com_handler->set_attempt_handler([&] {
-      webview2_environment_options options;
-      return m_webview2_loader.create_environment_with_options(
-          nullptr, userDataFolder, (ICoreWebView2EnvironmentOptions*)&options, m_com_handler);
+      auto res = m_webview2_loader.create_environment_with_options(
+          nullptr, userDataFolder,
+          use_options ? (ICoreWebView2EnvironmentOptions *)&options : nullptr,
+          m_com_handler);
+      if (FAILED(res) && use_options) {
+        use_options = false;
+        res = m_webview2_loader.create_environment_with_options(
+            nullptr, userDataFolder, nullptr, m_com_handler);
+      }
+      return res;
     });
     m_com_handler->try_create_environment();
 
