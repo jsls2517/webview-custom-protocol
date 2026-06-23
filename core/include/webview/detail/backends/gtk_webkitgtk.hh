@@ -356,15 +356,17 @@ private:
           path = "/index.html";
         }
         auto asset = detail::resolve_asset(*folder, path);
-        if (asset) {
-          void *data = g_malloc(asset->data.size());
-          std::memcpy(data, asset->data.data(), asset->data.size());
-          GBytes *bytes = g_bytes_new_take(data, asset->data.size());
+        if (asset.has_value()) {
+          const auto &resolved = asset.get();
+          void *data = g_malloc(resolved.data.size());
+          std::memcpy(data, resolved.data.data(), resolved.data.size());
+          GBytes *bytes = g_bytes_new_take(data, resolved.data.size());
           GInputStream *stream = g_memory_input_stream_new_from_bytes(bytes);
           g_bytes_unref(bytes);
 
-          webkit_uri_scheme_request_finish(request, stream, asset->data.size(),
-                                           asset->mime_type.c_str());
+          webkit_uri_scheme_request_finish(request, stream,
+                                           resolved.data.size(),
+                                           resolved.mime_type.c_str());
           g_object_unref(stream);
           return;
         }

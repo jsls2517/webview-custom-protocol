@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Assets Mapping & RPC Demo</title>
@@ -7,22 +7,22 @@
 </head>
 <body>
     <div class="container">
-        <h1>本地静态文件夹映射与 RPC 通信成功！</h1>
-        <p class="desc">该页面完全加载自本地资源文件夹 <code>./resources</code>，未开启任何本地 HTTP 服务端口。</p>
-        
+        <h1>Local asset mapping &amp; RPC working!</h1>
+        <p class="desc">This page was loaded entirely from the local <code>resources</code> folder, with no local HTTP server running.</p>
+
         <div class="card">
-            <h3>RPC 双向通信测试</h3>
+            <h3>RPC round-trip test</h3>
             <div class="input-group">
-                <input type="text" id="rpcInput" value="你好，C++！">
-                <button id="sendRpcBtn">发送 RPC 到 C++</button>
+                <input type="text" id="rpcInput" value="Hello, C++!">
+                <button id="sendRpcBtn">Send RPC to C++</button>
             </div>
             <div class="result-box">
-                <strong>C++ 返回值：</strong>
-                <span id="rpcResult">等待发送...</span>
+                <strong>C++ reply:</strong>
+                <span id="rpcResult">Waiting to send...</span>
             </div>
         </div>
     </div>
-    
+
     <script src="./script.js"></script>
 </body>
 </html>

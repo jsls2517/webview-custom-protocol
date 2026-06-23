@@ -400,12 +400,13 @@ private:
         path = "/index.html";
       }
       auto asset = detail::resolve_asset(*folder, path);
-      if (asset) {
+      if (asset.has_value()) {
+        const auto &resolved = asset.get();
         // Use NSHTTPURLResponse with status 200 for consistency with the 404
         // path and with the WKURLSchemeTask contract.
         id response = objc::msg_send<id>(objc::get_class("NSHTTPURLResponse"),
                                          objc::selector("alloc"));
-        id mime_ns = NSString_stringWithUTF8String(asset->mime_type.c_str());
+        id mime_ns = NSString_stringWithUTF8String(resolved.mime_type.c_str());
         id headers = objc::msg_send<id>(
             objc::get_class("NSDictionary"),
             objc::selector("dictionaryWithObject:forKey:"), mime_ns,
@@ -419,9 +420,9 @@ private:
                              response);
         objc::release(response);
 
-        id data = objc::msg_send<id>(objc::get_class("NSData"),
-                                     objc::selector("dataWithBytes:length:"),
-                                     asset->data.data(), asset->data.size());
+        id data = objc::msg_send<id>(
+            objc::get_class("NSData"), objc::selector("dataWithBytes:length:"),
+            resolved.data.data(), resolved.data.size());
         objc::msg_send<void>(task, objc::selector("didReceiveData:"), data);
 
         objc::msg_send<void>(task, objc::selector("didFinish"));

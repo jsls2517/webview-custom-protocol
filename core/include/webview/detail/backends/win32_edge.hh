@@ -722,13 +722,14 @@ protected:
           path = "/index.html";
         }
         auto asset = detail::resolve_asset(*folder, path);
-        if (asset) {
+        if (asset.has_value()) {
+          const auto &resolved = asset.get();
           IStream *stream = nullptr;
-          HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, asset->data.size());
+          HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, resolved.data.size());
           if (hGlob) {
             void *pData = GlobalLock(hGlob);
             if (pData) {
-              memcpy(pData, asset->data.data(), asset->data.size());
+              memcpy(pData, resolved.data.data(), resolved.data.size());
               GlobalUnlock(hGlob);
             }
             CreateStreamOnHGlobal(hGlob, TRUE, &stream);
@@ -736,7 +737,7 @@ protected:
 
           if (stream) {
             ICoreWebView2WebResourceResponse *response = nullptr;
-            auto w_mime = widen_string(asset->mime_type);
+            auto w_mime = widen_string(resolved.mime_type);
 
             HRESULT hr = m_env->CreateWebResourceResponse(
                 stream, 200, L"OK", (L"Content-Type: " + w_mime).c_str(),

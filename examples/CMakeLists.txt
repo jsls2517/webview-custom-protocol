@@ -35,3 +35,12 @@ target_link_libraries(webview_example_bind_cc PRIVATE webview::core Threads::Thr
 add_executable(webview_example_assets_mapping_rpc MACOSX_BUNDLE WIN32)
 target_sources(webview_example_assets_mapping_rpc PRIVATE assets_mapping_rpc.cc ${SHARED_SOURCES})
 target_link_libraries(webview_example_assets_mapping_rpc PRIVATE webview::core Threads::Threads)
+
+# Ship the example's web assets next to the executable so the app:// mapping
+# can resolve them at runtime (exe_dir() resolves to this directory on all
+# platforms, including inside a macOS app bundle's Contents/MacOS/).
+set(EXAMPLE_ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resources")
+add_custom_command(TARGET webview_example_assets_mapping_rpc POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${EXAMPLE_ASSETS_DIR}"
+            "$<TARGET_FILE_DIR:webview_example_assets_mapping_rpc>/resources")

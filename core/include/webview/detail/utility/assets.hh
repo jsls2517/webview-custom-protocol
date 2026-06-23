@@ -28,12 +28,12 @@
 
 #if defined(__cplusplus) && !defined(WEBVIEW_HEADER)
 
+#include "../optional.hh"
 #include "string.hh"
 
 #include <cstddef>
 #include <fstream>
 #include <iterator>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -202,19 +202,19 @@ struct resolved_asset {
 // Returns the file contents and MIME type on success, or an empty optional if
 // the request escapes `base_folder` (path traversal), the file does not exist,
 // or cannot be read. The MIME type is derived from the normalized file name.
-inline std::optional<resolved_asset>
-resolve_asset(const std::string &base_folder, const std::string &url_path) {
+inline optional<resolved_asset> resolve_asset(const std::string &base_folder,
+                                              const std::string &url_path) {
   // Layer 1: percent-decode before any path logic so "%2e%2e" cannot slip past.
   std::string decoded = percent_decode(url_path);
   // Layer 2: structural normalization rejects any ".." that escapes root.
   std::string relative = normalize_url_path(decoded);
   if (relative.empty()) {
-    return std::nullopt;
+    return {};
   }
 
   std::string base_canon = canonicalize_path(base_folder);
   if (base_canon.empty()) {
-    return std::nullopt;
+    return {};
   }
 
   std::string full = base_canon + "/" + relative;
@@ -228,12 +228,12 @@ resolve_asset(const std::string &base_folder, const std::string &url_path) {
 
   // Layer 3: containment check on the canonical paths.
   if (!is_within(base_canon, full_canon)) {
-    return std::nullopt;
+    return {};
   }
 
   std::ifstream file(full_canon, std::ios::binary);
   if (!file) {
-    return std::nullopt;
+    return {};
   }
   std::vector<char> buffer((std::istreambuf_iterator<char>(file)),
                            std::istreambuf_iterator<char>());
