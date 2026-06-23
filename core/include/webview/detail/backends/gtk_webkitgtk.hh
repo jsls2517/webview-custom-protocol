@@ -52,6 +52,7 @@
 #include "../platform/linux/webkitgtk/compat.hh"
 #include "../platform/linux/webkitgtk/dmabuf.hh"
 #include "../user_script.hh"
+#include "../utility/assets.hh"
 
 #include <cstring>
 #include <fstream>
@@ -349,27 +350,21 @@ private:
       std::string path =
           (slash == std::string::npos) ? "" : remain.substr(slash);
 
-      if (!m_virtual_host.empty() && host == m_virtual_host) {
+      const std::string *folder = find_assets_folder(host);
+      if (folder) {
         if (path.empty() || path == "/") {
           path = "/index.html";
         }
-        std::string full_path = m_assets_folder + path;
-
-        std::ifstream file(full_path, std::ios::binary);
-        if (file) {
-          std::vector<char> buffer((std::istreambuf_iterator<char>(file)),
-                                   std::istreambuf_iterator<char>());
-
-          std::string mime_type = detail::get_mime_type(path);
-
-          void *data = g_malloc(buffer.size());
-          std::memcpy(data, buffer.data(), buffer.size());
-          GBytes *bytes = g_bytes_new_take(data, buffer.size());
+        auto asset = detail::resolve_asset(*folder, path);
+        if (asset) {
+          void *data = g_malloc(asset->data.size());
+          std::memcpy(data, asset->data.data(), asset->data.size());
+          GBytes *bytes = g_bytes_new_take(data, asset->data.size());
           GInputStream *stream = g_memory_input_stream_new_from_bytes(bytes);
           g_bytes_unref(bytes);
 
-          webkit_uri_scheme_request_finish(request, stream, buffer.size(),
-                                           mime_type.c_str());
+          webkit_uri_scheme_request_finish(request, stream, asset->data.size(),
+                                           asset->mime_type.c_str());
           g_object_unref(stream);
           return;
         }

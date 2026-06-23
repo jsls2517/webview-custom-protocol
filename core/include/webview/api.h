@@ -176,6 +176,16 @@ WEBVIEW_API webview_error_t webview_set_html(webview_t w, const char *html);
 /**
  * Maps a virtual host name to a local directory for resolving assets without a running HTTP server.
  *
+ * The URL scheme is fixed to `app://`; `virtual_host` is used as the
+ * authority component of the URL. Multiple virtual hosts may be registered by
+ * calling this function once per host. The same host may be re-registered to
+ * update its folder mapping.
+ *
+ * Path traversal is rejected: requests whose normalized path escapes the
+ * registered folder (e.g. via `..` segments or percent-encoded equivalents)
+ * are answered with a 404 response rather than reading files outside the
+ * folder.
+ *
  * Example:
  * @code{.c}
  * webview_set_assets_mapping(w, "app.assets", "/path/to/dist");
@@ -184,7 +194,7 @@ WEBVIEW_API webview_error_t webview_set_html(webview_t w, const char *html);
  * @endcode
  *
  * @param w The webview instance.
- * @param virtual_host Virtual host name.
+ * @param virtual_host Virtual host name used as the URL authority.
  * @param folder_path Absolute local folder path to resolve files from.
  */
 WEBVIEW_API webview_error_t webview_set_assets_mapping(webview_t w,

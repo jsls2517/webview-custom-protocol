@@ -48,6 +48,7 @@
 #include "../platform/darwin/objc/objc.hh"
 #include "../platform/darwin/webkit/webkit.hh"
 #include "../user_script.hh"
+#include "../utility/assets.hh"
 
 #include <atomic>
 #include <fstream>
@@ -393,27 +394,26 @@ private:
     std::string host = host_ns ? NSString_get_UTF8String(host_ns) : "";
     std::string path = path_ns ? NSString_get_UTF8String(path_ns) : "";
 
-    if (!m_virtual_host.empty() && host == m_virtual_host) {
+    const std::string *folder = find_assets_folder(host);
+    if (folder) {
       if (path.empty() || path == "/") {
         path = "/index.html";
       }
-      std::string full_path = m_assets_folder + path;
-
-      std::ifstream file(full_path, std::ios::binary);
-      if (file) {
-        std::vector<char> buffer((std::istreambuf_iterator<char>(file)),
-                                 std::istreambuf_iterator<char>());
-
-        std::string mime_type = detail::get_mime_type(path);
-
-        id mime_ns = NSString_stringWithUTF8String(mime_type.c_str());
-        id response = objc::msg_send<id>(objc::get_class("NSURLResponse"),
+      auto asset = detail::resolve_asset(*folder, path);
+      if (asset) {
+        // Use NSHTTPURLResponse with status 200 for consistency with the 404
+        // path and with the WKURLSchemeTask contract.
+        id response = objc::msg_send<id>(objc::get_class("NSHTTPURLResponse"),
                                          objc::selector("alloc"));
+        id mime_ns = NSString_stringWithUTF8String(asset->mime_type.c_str());
+        id headers = objc::msg_send<id>(
+            objc::get_class("NSDictionary"),
+            objc::selector("dictionaryWithObject:forKey:"), mime_ns,
+            NSString_stringWithUTF8String("Content-Type"));
         response = objc::msg_send<id>(
             response,
-            objc::selector(
-                "initWithURL:MIMEType:expectedContentLength:textEncodingName:"),
-            url, mime_ns, buffer.size(), nullptr);
+            objc::selector("initWithURL:statusCode:HTTPVersion:headerFields:"),
+            url, 200, nullptr, headers);
 
         objc::msg_send<void>(task, objc::selector("didReceiveResponse:"),
                              response);
@@ -421,7 +421,7 @@ private:
 
         id data = objc::msg_send<id>(objc::get_class("NSData"),
                                      objc::selector("dataWithBytes:length:"),
-                                     buffer.data(), buffer.size());
+                                     asset->data.data(), asset->data.size());
         objc::msg_send<void>(task, objc::selector("didReceiveData:"), data);
 
         objc::msg_send<void>(task, objc::selector("didFinish"));

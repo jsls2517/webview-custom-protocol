@@ -53,6 +53,7 @@
 #include "../platform/windows/version.hh"
 #include "../platform/windows/webview2/loader.hh"
 #include "../user_script.hh"
+#include "../utility/assets.hh"
 #include "../utility/string.hh"
 
 #include <atomic>
@@ -86,18 +87,18 @@
 #ifndef __ICoreWebView2CustomSchemeRegistration_INTERFACE_DEFINED__
 #define __ICoreWebView2CustomSchemeRegistration_INTERFACE_DEFINED__
 interface ICoreWebView2CustomSchemeRegistration : public IUnknown {
-  virtual HRESULT STDMETHODCALLTYPE get_CustomSchemeName(LPOLESTR *
-                                                         schemeName) = 0;
-  virtual HRESULT STDMETHODCALLTYPE get_TreatAsSecure(BOOL * treatAsSecure) = 0;
+  virtual HRESULT STDMETHODCALLTYPE
+  get_CustomSchemeName(LPOLESTR *schemeName) = 0;
+  virtual HRESULT STDMETHODCALLTYPE get_TreatAsSecure(BOOL *treatAsSecure) = 0;
   virtual HRESULT STDMETHODCALLTYPE put_TreatAsSecure(BOOL treatAsSecure) = 0;
-  virtual HRESULT STDMETHODCALLTYPE GetAllowedOrigins(
-      UINT32 * allowedOriginsCount, LPOLESTR * *allowedOrigins) = 0;
-  virtual HRESULT STDMETHODCALLTYPE SetAllowedOrigins(
-      UINT32 allowedOriginsCount, LPOLESTR * allowedOrigins) = 0;
-  virtual HRESULT STDMETHODCALLTYPE get_HasAuthorityComponent(
-      BOOL * hasAuthorityComponent) = 0;
-  virtual HRESULT STDMETHODCALLTYPE put_HasAuthorityComponent(
-      BOOL hasAuthorityComponent) = 0;
+  virtual HRESULT STDMETHODCALLTYPE
+  GetAllowedOrigins(UINT32 *allowedOriginsCount, LPOLESTR **allowedOrigins) = 0;
+  virtual HRESULT STDMETHODCALLTYPE
+  SetAllowedOrigins(UINT32 allowedOriginsCount, LPOLESTR *allowedOrigins) = 0;
+  virtual HRESULT STDMETHODCALLTYPE
+  get_HasAuthorityComponent(BOOL *hasAuthorityComponent) = 0;
+  virtual HRESULT STDMETHODCALLTYPE
+  put_HasAuthorityComponent(BOOL hasAuthorityComponent) = 0;
 };
 #endif
 
@@ -105,11 +106,11 @@ interface ICoreWebView2CustomSchemeRegistration : public IUnknown {
 #define __ICoreWebView2EnvironmentOptions4_INTERFACE_DEFINED__
 interface ICoreWebView2EnvironmentOptions4 : public IUnknown {
   virtual HRESULT STDMETHODCALLTYPE GetCustomSchemeRegistrations(
-      UINT32 * count,
-      ICoreWebView2CustomSchemeRegistration * **schemeRegistrations) = 0;
+      UINT32 *count,
+      ICoreWebView2CustomSchemeRegistration ***schemeRegistrations) = 0;
   virtual HRESULT STDMETHODCALLTYPE SetCustomSchemeRegistrations(
       UINT32 count,
-      ICoreWebView2CustomSchemeRegistration * *schemeRegistrations) = 0;
+      ICoreWebView2CustomSchemeRegistration **schemeRegistrations) = 0;
 };
 #endif
 
@@ -715,25 +716,19 @@ protected:
       std::string path =
           (slash == std::string::npos) ? "" : remain.substr(slash);
 
-      if (!m_virtual_host.empty() && host == m_virtual_host) {
+      const std::string *folder = find_assets_folder(host);
+      if (folder) {
         if (path.empty() || path == "/") {
           path = "/index.html";
         }
-        std::string full_path = m_assets_folder + path;
-
-        std::ifstream file(full_path, std::ios::binary);
-        if (file) {
-          std::vector<char> buffer((std::istreambuf_iterator<char>(file)),
-                                   std::istreambuf_iterator<char>());
-
-          std::string mime_type = get_mime_type(path);
-
+        auto asset = detail::resolve_asset(*folder, path);
+        if (asset) {
           IStream *stream = nullptr;
-          HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, buffer.size());
+          HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, asset->data.size());
           if (hGlob) {
             void *pData = GlobalLock(hGlob);
             if (pData) {
-              memcpy(pData, buffer.data(), buffer.size());
+              memcpy(pData, asset->data.data(), asset->data.size());
               GlobalUnlock(hGlob);
             }
             CreateStreamOnHGlobal(hGlob, TRUE, &stream);
@@ -741,7 +736,7 @@ protected:
 
           if (stream) {
             ICoreWebView2WebResourceResponse *response = nullptr;
-            auto w_mime = widen_string(mime_type);
+            auto w_mime = widen_string(asset->mime_type);
 
             HRESULT hr = m_env->CreateWebResourceResponse(
                 stream, 200, L"OK", (L"Content-Type: " + w_mime).c_str(),
