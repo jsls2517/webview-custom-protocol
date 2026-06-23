@@ -145,6 +145,17 @@ window.__webview__.onUnbind(" +
 
   noresult set_html(const std::string &html) { return set_html_impl(html); }
 
+  noresult set_assets_mapping(const std::string &virtual_host,
+                              const std::string &folder_path) {
+    m_virtual_host = virtual_host;
+    m_assets_folder = folder_path;
+    return set_assets_mapping_impl(virtual_host, folder_path);
+  }
+
+  noresult set_background_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+    return set_background_color_impl(r, g, b, a);
+  }
+
   noresult init(const std::string &js) {
     add_user_script(js);
     return {};
@@ -153,6 +164,10 @@ window.__webview__.onUnbind(" +
   noresult eval(const std::string &js) { return eval_impl(js); }
 
 protected:
+  virtual noresult set_assets_mapping_impl(const std::string &virtual_host,
+                                           const std::string &folder_path) = 0;
+  virtual noresult set_background_color_impl(uint8_t r, uint8_t g, uint8_t b,
+                                             uint8_t a) = 0;
   virtual noresult navigate_impl(const std::string &url) = 0;
   virtual result<void *> window_impl() = 0;
   virtual result<void *> widget_impl() = 0;
@@ -347,6 +362,9 @@ protected:
   void set_default_size_guard(bool guarded) { m_is_size_set = guarded; }
 
   bool owns_window() const { return m_owns_window; }
+
+  std::string m_virtual_host;
+  std::string m_assets_folder;
 
 private:
   static std::atomic_uint &window_ref_count() {

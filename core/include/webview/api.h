@@ -26,6 +26,7 @@
 #ifndef WEBVIEW_API_H
 #define WEBVIEW_API_H
 
+#include <stdint.h>
 #include "errors.h"
 #include "macros.h"
 #include "types.h"
@@ -171,6 +172,37 @@ WEBVIEW_API webview_error_t webview_navigate(webview_t w, const char *url);
  * @param html HTML content.
  */
 WEBVIEW_API webview_error_t webview_set_html(webview_t w, const char *html);
+
+/**
+ * Maps a virtual host name to a local directory for resolving assets without a running HTTP server.
+ *
+ * Example:
+ * @code{.c}
+ * webview_set_assets_mapping(w, "app.assets", "/path/to/dist");
+ * // Then navigate to:
+ * // app://app.assets/index.html
+ * @endcode
+ *
+ * @param w The webview instance.
+ * @param virtual_host Virtual host name.
+ * @param folder_path Absolute local folder path to resolve files from.
+ */
+WEBVIEW_API webview_error_t webview_set_assets_mapping(webview_t w,
+                                                       const char *virtual_host,
+                                                       const char *folder_path);
+
+/**
+ * Sets the default background color of the webview and native window.
+ *
+ * @param w The webview instance.
+ * @param r Red component (0-255).
+ * @param g Green component (0-255).
+ * @param b Blue component (0-255).
+ * @param a Alpha component (0-255).
+ */
+WEBVIEW_API webview_error_t webview_set_background_color(webview_t w,
+                                                         uint8_t r, uint8_t g,
+                                                         uint8_t b, uint8_t a);
 
 /**
  * Injects JavaScript code to be executed immediately upon loading a page.
