@@ -742,6 +742,23 @@ protected:
                                         &m_web_resource_token);
   }
 
+  // Shared WM_ERASEBKGND handler for both the main and widget window procs.
+  // Returns TRUE (non-zero) when the background was erased with the configured
+  // color, or falls through to DefWindowProcW otherwise. Returning non-zero for
+  // WM_ERASEBKGND signals that the background was handled.
+  LRESULT handle_erase_bkgnd(HWND hwnd, WPARAM wp, LPARAM lp) {
+    if (m_has_background_color) {
+      auto hdc = reinterpret_cast<HDC>(wp);
+      RECT rc;
+      GetClientRect(hwnd, &rc);
+      HBRUSH brush = CreateSolidBrush(m_background_color);
+      FillRect(hdc, &rc, brush);
+      DeleteObject(brush);
+      return TRUE;
+    }
+    return DefWindowProcW(hwnd, WM_ERASEBKGND, wp, lp);
+  }
+
   HRESULT
   on_web_resource_requested(ICoreWebView2 *sender,
                             ICoreWebView2WebResourceRequestedEventArgs *args) {
@@ -968,18 +985,8 @@ private:
         case WM_SIZE:
           w->resize_widget();
           break;
-        case WM_ERASEBKGND: {
-          if (w->m_has_background_color) {
-            auto hdc = reinterpret_cast<HDC>(wp);
-            RECT rc;
-            GetClientRect(hwnd, &rc);
-            HBRUSH brush = CreateSolidBrush(w->m_background_color);
-            FillRect(hdc, &rc, brush);
-            DeleteObject(brush);
-            return TRUE;
-          }
-          return DefWindowProcW(hwnd, msg, wp, lp);
-        }
+        case WM_ERASEBKGND:
+          return w->handle_erase_bkgnd(hwnd, wp, lp);
         case WM_CLOSE:
           DestroyWindow(hwnd);
           break;
@@ -1072,18 +1079,8 @@ private:
       case WM_SIZE:
         w->resize_webview();
         break;
-      case WM_ERASEBKGND: {
-        if (w->m_has_background_color) {
-          auto hdc = reinterpret_cast<HDC>(wp);
-          RECT rc;
-          GetClientRect(hwnd, &rc);
-          HBRUSH brush = CreateSolidBrush(w->m_background_color);
-          FillRect(hdc, &rc, brush);
-          DeleteObject(brush);
-          return TRUE;
-        }
-        return DefWindowProcW(hwnd, msg, wp, lp);
-      }
+      case WM_ERASEBKGND:
+        return w->handle_erase_bkgnd(hwnd, wp, lp);
       case WM_DESTROY:
         w->m_widget = nullptr;
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
