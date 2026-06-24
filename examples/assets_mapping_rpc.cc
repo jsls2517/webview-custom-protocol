@@ -62,9 +62,17 @@ int main() {
     //    42) so resizing the window does not flash white under a dark theme.
     w.set_background_color(15, 23, 42, 255);
 
-    // 2. Map the virtual host "app.local" to the local "resources" folder
-    //    shipped beside the executable. The URL scheme is fixed to app://.
+    // 2. Map the virtual host "app.local" to the local assets folder shipped
+    //    with the example. The URL scheme is fixed to app://.
+    //    - macOS: assets live in the app bundle at Contents/Resources/
+    //      (the executable is in Contents/MacOS/).
+    //    - Windows/Linux: assets live in a "resources" folder next to the
+    //      executable.
+#if defined(__APPLE__)
+    std::string resources = exe_dir() + "/../Resources";
+#else
     std::string resources = exe_dir() + "/resources";
+#endif
     w.set_assets_mapping("app.local", resources);
 
     // 3. Register an RPC handler reusing the existing bind() API. The front end
