@@ -236,7 +236,7 @@ TEST_CASE("normalize_url_path rejects traversal and normalizes segments") {
 TEST_CASE("percent_decode decodes percent-escaped sequences") {
   using webview::detail::percent_decode;
   REQUIRE(percent_decode("hello") == "hello");
-  REQUIRE(percent_decode("") == "");
+  REQUIRE(percent_decode("").empty());
   // %2e -> '.', %2f -> '/'
   REQUIRE(percent_decode("%2e%2e%2f") == "../");
   // Lowercase hex works the same as uppercase.

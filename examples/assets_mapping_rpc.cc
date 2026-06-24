@@ -37,7 +37,7 @@ static std::string exe_dir() {
   if (len <= 0) {
     return ".";
   }
-  path[len] = '\0';
+  path[len] = '\0'; // NOLINT(cppcoreguidelines-pro-bounds-constant-array-index)
   std::string p(path);
 #endif
   auto slash = p.find_last_of("/\\");
