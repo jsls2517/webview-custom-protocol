@@ -186,3 +186,83 @@ TEST_CASE("Ensure that narrow/wide string conversion works on Windows") {
   REQUIRE(narrow_string(std::wstring(2, L'\0')) == std::string(2, '\0'));
 }
 #endif
+
+TEST_CASE("get_mime_type returns expected MIME types") {
+  using webview::detail::get_mime_type;
+  REQUIRE(get_mime_type("index.html") == "text/html");
+  REQUIRE(get_mime_type("page.htm") == "text/html");
+  REQUIRE(get_mime_type("style.css") == "text/css");
+  REQUIRE(get_mime_type("app.js") == "application/javascript");
+  REQUIRE(get_mime_type("data.json") == "application/json");
+  REQUIRE(get_mime_type("photo.png") == "image/png");
+  REQUIRE(get_mime_type("photo.jpg") == "image/jpeg");
+  REQUIRE(get_mime_type("photo.jpeg") == "image/jpeg");
+  REQUIRE(get_mime_type("anim.gif") == "image/gif");
+  REQUIRE(get_mime_type("logo.svg") == "image/svg+xml");
+  REQUIRE(get_mime_type("favicon.ico") == "image/x-icon");
+  // Unknown / missing extension falls back to a binary stream.
+  REQUIRE(get_mime_type("archive.unknownext") == "application/octet-stream");
+  REQUIRE(get_mime_type("noextension") == "application/octet-stream");
+  // Extension matching is case-insensitive.
+  REQUIRE(get_mime_type("INDEX.HTML") == "text/html");
+  REQUIRE(get_mime_type("App.JS") == "application/javascript");
+}
+
+TEST_CASE("normalize_url_path rejects traversal and normalizes segments") {
+  using webview::detail::normalize_url_path;
+  // Simple paths are preserved (leading separator dropped).
+  REQUIRE(normalize_url_path("/index.html") == "index.html");
+  REQUIRE(normalize_url_path("/css/style.css") == "css/style.css");
+  // '.' segments and empty segments are dropped.
+  REQUIRE(normalize_url_path("/a/./b") == "a/b");
+  REQUIRE(normalize_url_path("//a///b") == "a/b");
+  // Backslashes are treated as separators too.
+  REQUIRE(normalize_url_path("\\a\\b\\c") == "a/b/c");
+  // A non-escaping '..' collapses the previous segment.
+  REQUIRE(normalize_url_path("/a/b/../c") == "a/c");
+  // An empty / root input yields an empty result.
+  REQUIRE(normalize_url_path("").empty());
+  REQUIRE(normalize_url_path("/").empty());
+  // Traversal attempts that would escape the root are rejected (empty result).
+  REQUIRE(normalize_url_path("/../etc/passwd").empty());
+  REQUIRE(normalize_url_path("/a/../../etc/passwd").empty());
+  REQUIRE(normalize_url_path("..").empty());
+  // The structural check operates BEFORE percent-decoding, so an encoded
+  // traversal still appears as literal "%2e%2e" here and is treated as a
+  // normal segment (decoding happens one layer up in resolve_asset()).
+  REQUIRE(normalize_url_path("/%2e%2e/secret") == "%2e%2e/secret");
+}
+
+TEST_CASE("percent_decode decodes percent-escaped sequences") {
+  using webview::detail::percent_decode;
+  REQUIRE(percent_decode("hello") == "hello");
+  REQUIRE(percent_decode("").empty());
+  // %2e -> '.', %2f -> '/'
+  REQUIRE(percent_decode("%2e%2e%2f") == "../");
+  // Lowercase hex works the same as uppercase.
+  REQUIRE(percent_decode("%2E%2F") == "./");
+  // Non-escaped characters are passed through verbatim.
+  REQUIRE(percent_decode("a%20b") == "a b");
+  // A malformed sequence ('%' not followed by two hex digits) is copied as-is.
+  REQUIRE(percent_decode("%2") == "%2");
+  REQUIRE(percent_decode("%zz") == "%zz");
+  REQUIRE(percent_decode("100%") == "100%");
+}
+
+TEST_CASE("is_within is boundary-aware") {
+  using webview::detail::is_within;
+  // A path equal to the base is inside.
+  REQUIRE(is_within("/a/b", "/a/b"));
+  // A direct child is inside.
+  REQUIRE(is_within("/a/b", "/a/b/c"));
+  REQUIRE(is_within("/a/b", "/a/b/deep/file"));
+  // A different directory that merely shares a prefix is NOT inside.
+  REQUIRE_FALSE(is_within("/a/b", "/a-b"));
+  REQUIRE_FALSE(is_within("/a/b", "/a/bc"));
+  // Shorter target and empty inputs are rejected.
+  REQUIRE_FALSE(is_within("/a/b", "/a"));
+  REQUIRE_FALSE(is_within("", "/a"));
+  REQUIRE_FALSE(is_within("/a", ""));
+  // Both forward and backslash separators are recognized as boundaries.
+  REQUIRE(is_within("C:/app", "C:/app\\dist\\index.html"));
+}

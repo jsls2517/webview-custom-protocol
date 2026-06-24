@@ -147,8 +147,7 @@ window.__webview__.onUnbind(" +
 
   noresult set_assets_mapping(const std::string &virtual_host,
                               const std::string &folder_path) {
-    m_virtual_host = virtual_host;
-    m_assets_folder = folder_path;
+    m_assets_mappings[virtual_host] = folder_path;
     return set_assets_mapping_impl(virtual_host, folder_path);
   }
 
@@ -363,8 +362,19 @@ protected:
 
   bool owns_window() const { return m_owns_window; }
 
-  std::string m_virtual_host;
-  std::string m_assets_folder;
+  // Map of virtual host -> local folder. Supports registering multiple hosts.
+  std::map<std::string, std::string> m_assets_mappings;
+
+  // Returns a pointer to the folder registered for `host`, or nullptr if no
+  // mapping exists. The pointer is valid as long as the engine is alive and the
+  // mapping is not overwritten/removed.
+  const std::string *find_assets_folder(const std::string &host) const {
+    auto it = m_assets_mappings.find(host);
+    if (it == m_assets_mappings.end()) {
+      return nullptr;
+    }
+    return &it->second;
+  }
 
 private:
   static std::atomic_uint &window_ref_count() {

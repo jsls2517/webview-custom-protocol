@@ -53,6 +53,7 @@
 #include "../platform/windows/version.hh"
 #include "../platform/windows/webview2/loader.hh"
 #include "../user_script.hh"
+#include "../utility/assets.hh"
 #include "../utility/string.hh"
 
 #include <atomic>
@@ -86,18 +87,18 @@
 #ifndef __ICoreWebView2CustomSchemeRegistration_INTERFACE_DEFINED__
 #define __ICoreWebView2CustomSchemeRegistration_INTERFACE_DEFINED__
 interface ICoreWebView2CustomSchemeRegistration : public IUnknown {
-  virtual HRESULT STDMETHODCALLTYPE get_CustomSchemeName(LPOLESTR *
-                                                         schemeName) = 0;
-  virtual HRESULT STDMETHODCALLTYPE get_TreatAsSecure(BOOL * treatAsSecure) = 0;
+  virtual HRESULT STDMETHODCALLTYPE
+  get_CustomSchemeName(LPOLESTR *schemeName) = 0;
+  virtual HRESULT STDMETHODCALLTYPE get_TreatAsSecure(BOOL *treatAsSecure) = 0;
   virtual HRESULT STDMETHODCALLTYPE put_TreatAsSecure(BOOL treatAsSecure) = 0;
-  virtual HRESULT STDMETHODCALLTYPE GetAllowedOrigins(
-      UINT32 * allowedOriginsCount, LPOLESTR * *allowedOrigins) = 0;
-  virtual HRESULT STDMETHODCALLTYPE SetAllowedOrigins(
-      UINT32 allowedOriginsCount, LPOLESTR * allowedOrigins) = 0;
-  virtual HRESULT STDMETHODCALLTYPE get_HasAuthorityComponent(
-      BOOL * hasAuthorityComponent) = 0;
-  virtual HRESULT STDMETHODCALLTYPE put_HasAuthorityComponent(
-      BOOL hasAuthorityComponent) = 0;
+  virtual HRESULT STDMETHODCALLTYPE
+  GetAllowedOrigins(UINT32 *allowedOriginsCount, LPOLESTR **allowedOrigins) = 0;
+  virtual HRESULT STDMETHODCALLTYPE
+  SetAllowedOrigins(UINT32 allowedOriginsCount, LPOLESTR *allowedOrigins) = 0;
+  virtual HRESULT STDMETHODCALLTYPE
+  get_HasAuthorityComponent(BOOL *hasAuthorityComponent) = 0;
+  virtual HRESULT STDMETHODCALLTYPE
+  put_HasAuthorityComponent(BOOL hasAuthorityComponent) = 0;
 };
 #endif
 
@@ -105,11 +106,11 @@ interface ICoreWebView2CustomSchemeRegistration : public IUnknown {
 #define __ICoreWebView2EnvironmentOptions4_INTERFACE_DEFINED__
 interface ICoreWebView2EnvironmentOptions4 : public IUnknown {
   virtual HRESULT STDMETHODCALLTYPE GetCustomSchemeRegistrations(
-      UINT32 * count,
-      ICoreWebView2CustomSchemeRegistration * **schemeRegistrations) = 0;
+      UINT32 *count,
+      ICoreWebView2CustomSchemeRegistration ***schemeRegistrations) = 0;
   virtual HRESULT STDMETHODCALLTYPE SetCustomSchemeRegistrations(
       UINT32 count,
-      ICoreWebView2CustomSchemeRegistration * *schemeRegistrations) = 0;
+      ICoreWebView2CustomSchemeRegistration **schemeRegistrations) = 0;
 };
 #endif
 
@@ -141,8 +142,14 @@ public:
       : m_scheme{scheme} {}
   virtual ~webview2_custom_scheme_registration() = default;
 
-  ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
-  ULONG STDMETHODCALLTYPE Release() override { return 1; }
+  ULONG STDMETHODCALLTYPE AddRef() override { return ++m_ref_count; }
+  ULONG STDMETHODCALLTYPE Release() override {
+    if (m_ref_count > 1) {
+      return --m_ref_count;
+    }
+    delete this;
+    return 0;
+  }
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv) override {
     if (!ppv)
       return E_POINTER;
@@ -197,6 +204,7 @@ public:
 
 private:
   std::wstring m_scheme;
+  std::atomic<ULONG> m_ref_count{1};
 };
 
 class webview2_environment_options : public ICoreWebView2EnvironmentOptions,
@@ -207,8 +215,14 @@ public:
   }
   virtual ~webview2_environment_options() { delete m_registration; }
 
-  ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
-  ULONG STDMETHODCALLTYPE Release() override { return 1; }
+  ULONG STDMETHODCALLTYPE AddRef() override { return ++m_ref_count; }
+  ULONG STDMETHODCALLTYPE Release() override {
+    if (m_ref_count > 1) {
+      return --m_ref_count;
+    }
+    delete this;
+    return 0;
+  }
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv) override {
     if (!ppv)
       return E_POINTER;
@@ -290,6 +304,7 @@ public:
 
 private:
   webview2_custom_scheme_registration *m_registration;
+  std::atomic<ULONG> m_ref_count{1};
 };
 
 class webview2_web_resource_requested_handler
@@ -300,8 +315,14 @@ public:
   webview2_web_resource_requested_handler(callback_fn cb) : m_cb{cb} {}
   virtual ~webview2_web_resource_requested_handler() = default;
 
-  ULONG STDMETHODCALLTYPE AddRef() override { return 1; }
-  ULONG STDMETHODCALLTYPE Release() override { return 1; }
+  ULONG STDMETHODCALLTYPE AddRef() override { return ++m_ref_count; }
+  ULONG STDMETHODCALLTYPE Release() override {
+    if (m_ref_count > 1) {
+      return --m_ref_count;
+    }
+    delete this;
+    return 0;
+  }
   HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, LPVOID *ppv) override {
     if (!ppv)
       return E_POINTER;
@@ -327,6 +348,7 @@ public:
 
 private:
   callback_fn m_cb;
+  std::atomic<ULONG> m_ref_count{1};
 };
 
 class webview2_com_handler
@@ -565,6 +587,13 @@ public:
   }
 
   virtual ~win32_edge_engine() {
+    // Unregister the app:// resource handler before releasing the webview so
+    // WebView2 cannot dispatch into a dangling callback during teardown.
+    if (m_webview && m_web_resource_handler) {
+      m_webview->remove_WebResourceRequested(m_web_resource_token);
+      m_web_resource_handler->Release();
+      m_web_resource_handler = nullptr;
+    }
     if (m_com_handler) {
       m_com_handler->Release();
       m_com_handler = nullptr;
@@ -692,6 +721,44 @@ protected:
     return window_show();
   }
 
+  // Registers the app:// resource filter and handler once the webview exists.
+  // Safe to call only after m_webview is set. The handler dispatches per host
+  // via the m_assets_mappings map, so a single broad filter suffices.
+  void register_app_resource_handler() {
+    if (!m_webview || m_web_resource_handler) {
+      return;
+    }
+    // A single filter covering the whole app:// scheme; the handler rejects
+    // unknown hosts and path-traversal attempts internally.
+    auto host = widen_string("app://*");
+    m_webview->AddWebResourceRequestedFilter(
+        host.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+    m_web_resource_handler = new webview2_web_resource_requested_handler(
+        [this](ICoreWebView2 *sender,
+               ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
+          return on_web_resource_requested(sender, args);
+        });
+    m_webview->add_WebResourceRequested(m_web_resource_handler,
+                                        &m_web_resource_token);
+  }
+
+  // Shared WM_ERASEBKGND handler for both the main and widget window procs.
+  // Returns TRUE (non-zero) when the background was erased with the configured
+  // color, or falls through to DefWindowProcW otherwise. Returning non-zero for
+  // WM_ERASEBKGND signals that the background was handled.
+  LRESULT handle_erase_bkgnd(HWND hwnd, WPARAM wp, LPARAM lp) {
+    if (m_has_background_color) {
+      auto hdc = reinterpret_cast<HDC>(wp);
+      RECT rc;
+      GetClientRect(hwnd, &rc);
+      HBRUSH brush = CreateSolidBrush(m_background_color);
+      FillRect(hdc, &rc, brush);
+      DeleteObject(brush);
+      return TRUE;
+    }
+    return DefWindowProcW(hwnd, WM_ERASEBKGND, wp, lp);
+  }
+
   HRESULT
   on_web_resource_requested(ICoreWebView2 *sender,
                             ICoreWebView2WebResourceRequestedEventArgs *args) {
@@ -715,25 +782,20 @@ protected:
       std::string path =
           (slash == std::string::npos) ? "" : remain.substr(slash);
 
-      if (!m_virtual_host.empty() && host == m_virtual_host) {
+      const std::string *folder = find_assets_folder(host);
+      if (folder) {
         if (path.empty() || path == "/") {
           path = "/index.html";
         }
-        std::string full_path = m_assets_folder + path;
-
-        std::ifstream file(full_path, std::ios::binary);
-        if (file) {
-          std::vector<char> buffer((std::istreambuf_iterator<char>(file)),
-                                   std::istreambuf_iterator<char>());
-
-          std::string mime_type = get_mime_type(path);
-
+        auto asset = detail::resolve_asset(*folder, path);
+        if (asset.has_value()) {
+          const auto &resolved = asset.get();
           IStream *stream = nullptr;
-          HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, buffer.size());
+          HGLOBAL hGlob = GlobalAlloc(GMEM_MOVEABLE, resolved.data.size());
           if (hGlob) {
             void *pData = GlobalLock(hGlob);
             if (pData) {
-              memcpy(pData, buffer.data(), buffer.size());
+              memcpy(pData, resolved.data.data(), resolved.data.size());
               GlobalUnlock(hGlob);
             }
             CreateStreamOnHGlobal(hGlob, TRUE, &stream);
@@ -741,7 +803,7 @@ protected:
 
           if (stream) {
             ICoreWebView2WebResourceResponse *response = nullptr;
-            auto w_mime = widen_string(mime_type);
+            auto w_mime = widen_string(resolved.mime_type);
 
             HRESULT hr = m_env->CreateWebResourceResponse(
                 stream, 200, L"OK", (L"Content-Type: " + w_mime).c_str(),
@@ -800,21 +862,13 @@ protected:
 
   noresult set_assets_mapping_impl(const std::string &virtual_host,
                                    const std::string &folder_path) override {
-    if (!m_webview || !m_env) {
-      return error_info{WEBVIEW_ERROR_INVALID_STATE};
-    }
-    auto w_host = widen_string("app://" + virtual_host + "/*");
-    m_webview->AddWebResourceRequestedFilter(
-        w_host.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
-
-    EventRegistrationToken token;
-    auto handler = new webview2_web_resource_requested_handler(
-        [this](ICoreWebView2 *sender,
-               ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
-          return on_web_resource_requested(sender, args);
-        });
-    m_webview->add_WebResourceRequested(handler, &token);
-    handler->Release();
+    // The app:// resource filter and handler are registered once when the
+    // controller is created (see embed()). Here we only update the host->folder
+    // mapping, which the handler consults at request time. This keeps the
+    // contract identical across platforms: set_assets_mapping() can be called
+    // at any time, before or after navigate(), and simply updates the map.
+    (void)virtual_host;
+    (void)folder_path;
     return {};
   }
 
@@ -931,18 +985,8 @@ private:
         case WM_SIZE:
           w->resize_widget();
           break;
-        case WM_ERASEBKGND: {
-          if (w->m_has_background_color) {
-            auto hdc = reinterpret_cast<HDC>(wp);
-            RECT rc;
-            GetClientRect(hwnd, &rc);
-            HBRUSH brush = CreateSolidBrush(w->m_background_color);
-            FillRect(hdc, &rc, brush);
-            DeleteObject(brush);
-            return TRUE;
-          }
-          return DefWindowProcW(hwnd, msg, wp, lp);
-        }
+        case WM_ERASEBKGND:
+          return w->handle_erase_bkgnd(hwnd, wp, lp);
         case WM_CLOSE:
           DestroyWindow(hwnd);
           break;
@@ -1035,18 +1079,8 @@ private:
       case WM_SIZE:
         w->resize_webview();
         break;
-      case WM_ERASEBKGND: {
-        if (w->m_has_background_color) {
-          auto hdc = reinterpret_cast<HDC>(wp);
-          RECT rc;
-          GetClientRect(hwnd, &rc);
-          HBRUSH brush = CreateSolidBrush(w->m_background_color);
-          FillRect(hdc, &rc, brush);
-          DeleteObject(brush);
-          return TRUE;
-        }
-        return DefWindowProcW(hwnd, msg, wp, lp);
-      }
+      case WM_ERASEBKGND:
+        return w->handle_erase_bkgnd(hwnd, wp, lp);
       case WM_DESTROY:
         w->m_widget = nullptr;
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
@@ -1155,6 +1189,11 @@ private:
           m_env = env;
           m_controller = controller;
           m_webview = webview;
+          // Register the app:// resource handler exactly once, now that the
+          // webview exists. The handler consults the host->folder map at
+          // request time, so set_assets_mapping() can be called before or
+          // after this point.
+          register_app_resource_handler();
           flag.clear();
         });
 
@@ -1308,6 +1347,8 @@ private:
   ICoreWebView2 *m_webview = nullptr;
   ICoreWebView2Controller *m_controller = nullptr;
   webview2_com_handler *m_com_handler = nullptr;
+  webview2_web_resource_requested_handler *m_web_resource_handler = nullptr;
+  EventRegistrationToken m_web_resource_token{};
   mswebview2::loader m_webview2_loader;
   int m_dpi{};
   bool m_is_window_shown{};
