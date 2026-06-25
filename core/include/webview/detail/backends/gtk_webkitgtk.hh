@@ -129,6 +129,10 @@ public:
     if (m_webview) {
       g_object_unref(m_webview);
     }
+    if (m_css_provider) {
+      g_object_unref(m_css_provider);
+      m_css_provider = nullptr;
+    }
     if (owns_window()) {
       // Needed for the window to close immediately.
       deplete_run_loop_event_queue();
@@ -209,6 +213,29 @@ protected:
     rgba.blue = b / 255.0;
     rgba.alpha = a / 255.0;
     webkit_web_view_set_background_color(WEBKIT_WEB_VIEW(m_webview), &rgba);
+
+    // Also set the native window background via CSS to prevent flashing the
+    // default theme color during resize or initial load, matching the
+    // behavior on Windows (WM_ERASEBKGND) and macOS (NSWindow background).
+    if (m_window) {
+      if (!m_css_provider) {
+        m_css_provider = gtk_css_provider_new();
+      }
+      gchar *rgba_str = gdk_rgba_to_string(&rgba);
+      auto css =
+          std::string("window { background-color: ") + rgba_str + "; }";
+      g_free(rgba_str);
+#if GTK_MAJOR_VERSION >= 4
+      gtk_css_provider_load_from_data(m_css_provider, css.c_str(), -1);
+#else
+      gtk_css_provider_load_from_data(m_css_provider, css.c_str(), -1,
+                                      nullptr);
+#endif
+      auto *ctx = gtk_widget_get_style_context(m_window);
+      gtk_style_context_add_provider(
+          ctx, GTK_STYLE_PROVIDER(m_css_provider),
+          GTK_STYLE_PROVIDER_PRIORITY_USER);
+    }
     return {};
   }
 
@@ -350,6 +377,16 @@ private:
       std::string path =
           (slash == std::string::npos) ? "" : remain.substr(slash);
 
+      // Strip query string and fragment (see win32_edge.hh for rationale).
+      auto qmark = path.find('?');
+      if (qmark != std::string::npos) {
+        path = path.substr(0, qmark);
+      }
+      auto hash = path.find('#');
+      if (hash != std::string::npos) {
+        path = path.substr(0, hash);
+      }
+
       const std::string *folder = find_assets_folder(host);
       if (folder) {
         if (path.empty() || path == "/") {
@@ -373,9 +410,20 @@ private:
       }
     }
 
+    // Resource not found. Prefer finish_error (WebKitGTK >= 2.36) so the
+    // request fails like it does on Windows (404) and macOS (404). Fall back
+    // to an empty response on older WebKitGTK where finish_error is unavailable.
+#if (WEBKIT_MAJOR_VERSION == 2 && WEBKIT_MINOR_VERSION >= 36) ||               \
+    WEBKIT_MAJOR_VERSION > 2
+    auto *error = g_error_new(g_quark_from_string("WEBVIEW_NOT_FOUND"), 404,
+                              "Not Found");
+    webkit_uri_scheme_request_finish_error(request, error);
+    g_error_free(error);
+#else
     GInputStream *stream = g_memory_input_stream_new();
     webkit_uri_scheme_request_finish(request, stream, 0, "text/plain");
     g_object_unref(stream);
+#endif
   }
 
   void window_settings(bool debug) {
@@ -413,6 +461,7 @@ private:
   GtkWidget *m_window{};
   GtkWidget *m_webview{};
   WebKitUserContentManager *m_user_content_manager{};
+  GtkCssProvider *m_css_provider{};
   bool m_stop_run_loop{};
   bool m_is_window_shown{};
 };

@@ -147,7 +147,9 @@ window.__webview__.onUnbind(" +
 
   noresult set_assets_mapping(const std::string &virtual_host,
                               const std::string &folder_path) {
-    m_assets_mappings[virtual_host] = folder_path;
+    // Host names are case-insensitive per RFC 3986 §3.2.2. Normalize to
+    // lowercase so that "App.Local" and "app.local" match the same mapping.
+    m_assets_mappings[to_lower_ascii(virtual_host)] = folder_path;
     return set_assets_mapping_impl(virtual_host, folder_path);
   }
 
@@ -369,7 +371,7 @@ protected:
   // mapping exists. The pointer is valid as long as the engine is alive and the
   // mapping is not overwritten/removed.
   const std::string *find_assets_folder(const std::string &host) const {
-    auto it = m_assets_mappings.find(host);
+    auto it = m_assets_mappings.find(to_lower_ascii(host));
     if (it == m_assets_mappings.end()) {
       return nullptr;
     }
@@ -377,6 +379,17 @@ protected:
   }
 
 private:
+  // Converts ASCII uppercase letters to lowercase. Used for case-insensitive
+  // host matching (RFC 3986 §3.2.2). Non-ASCII characters are unchanged.
+  static std::string to_lower_ascii(std::string s) {
+    for (auto &c : s) {
+      if (c >= 'A' && c <= 'Z') {
+        c = static_cast<char>(c - 'A' + 'a');
+      }
+    }
+    return s;
+  }
+
   static std::atomic_uint &window_ref_count() {
     static std::atomic_uint ref_count{0};
     return ref_count;

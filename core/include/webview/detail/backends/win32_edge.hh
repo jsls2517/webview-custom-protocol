@@ -768,7 +768,10 @@ protected:
       return S_OK;
 
     LPWSTR uri_raw = nullptr;
-    request->get_Uri(&uri_raw);
+    if (FAILED(request->get_Uri(&uri_raw)) || !uri_raw) {
+      request->Release();
+      return S_OK;
+    }
     std::wstring uri_ws(uri_raw);
     CoTaskMemFree(uri_raw);
 
@@ -781,6 +784,18 @@ protected:
           (slash == std::string::npos) ? remain : remain.substr(0, slash);
       std::string path =
           (slash == std::string::npos) ? "" : remain.substr(slash);
+
+      // Strip query string and fragment so that URLs like
+      // "app://host/style.css?v=1" resolve correctly. macOS gets this for
+      // free via NSURL.path, but on Windows/Linux we parse the URI manually.
+      auto qmark = path.find('?');
+      if (qmark != std::string::npos) {
+        path = path.substr(0, qmark);
+      }
+      auto hash = path.find('#');
+      if (hash != std::string::npos) {
+        path = path.substr(0, hash);
+      }
 
       const std::string *folder = find_assets_folder(host);
       if (folder) {
@@ -797,8 +812,10 @@ protected:
             if (pData) {
               memcpy(pData, resolved.data.data(), resolved.data.size());
               GlobalUnlock(hGlob);
+              CreateStreamOnHGlobal(hGlob, TRUE, &stream);
+            } else {
+              GlobalFree(hGlob);
             }
-            CreateStreamOnHGlobal(hGlob, TRUE, &stream);
           }
 
           if (stream) {
@@ -812,11 +829,13 @@ protected:
             if (SUCCEEDED(hr) && response) {
               args->put_Response(response);
               response->Release();
+              stream->Release();
+              request->Release();
+              return S_OK;
             }
             stream->Release();
           }
-          request->Release();
-          return S_OK;
+          // Stream or response creation failed; fall through to 404.
         }
       }
     }
@@ -834,11 +853,11 @@ protected:
 
   noresult set_background_color_impl(uint8_t r, uint8_t g, uint8_t b,
                                      uint8_t a) override {
-    m_background_color = RGB(r, g, b);
-    m_has_background_color = true;
     if (!m_controller) {
       return error_info{WEBVIEW_ERROR_INVALID_STATE};
     }
+    m_background_color = RGB(r, g, b);
+    m_has_background_color = true;
     static constexpr IID IID_ICoreWebView2Controller2{
         0xC9798C61,
         0x5EE3,
