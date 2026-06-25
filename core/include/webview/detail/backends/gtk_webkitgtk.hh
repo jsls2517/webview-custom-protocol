@@ -222,19 +222,16 @@ protected:
         m_css_provider = gtk_css_provider_new();
       }
       gchar *rgba_str = gdk_rgba_to_string(&rgba);
-      auto css =
-          std::string("window { background-color: ") + rgba_str + "; }";
+      auto css = std::string("window { background-color: ") + rgba_str + "; }";
       g_free(rgba_str);
 #if GTK_MAJOR_VERSION >= 4
       gtk_css_provider_load_from_data(m_css_provider, css.c_str(), -1);
 #else
-      gtk_css_provider_load_from_data(m_css_provider, css.c_str(), -1,
-                                      nullptr);
+      gtk_css_provider_load_from_data(m_css_provider, css.c_str(), -1, nullptr);
 #endif
       auto *ctx = gtk_widget_get_style_context(m_window);
-      gtk_style_context_add_provider(
-          ctx, GTK_STYLE_PROVIDER(m_css_provider),
-          GTK_STYLE_PROVIDER_PRIORITY_USER);
+      gtk_style_context_add_provider(ctx, GTK_STYLE_PROVIDER(m_css_provider),
+                                     GTK_STYLE_PROVIDER_PRIORITY_USER);
     }
     return {};
   }
@@ -415,8 +412,8 @@ private:
     // to an empty response on older WebKitGTK where finish_error is unavailable.
 #if (WEBKIT_MAJOR_VERSION == 2 && WEBKIT_MINOR_VERSION >= 36) ||               \
     WEBKIT_MAJOR_VERSION > 2
-    auto *error = g_error_new(g_quark_from_string("WEBVIEW_NOT_FOUND"), 404,
-                              "Not Found");
+    auto *error =
+        g_error_new(g_quark_from_string("WEBVIEW_NOT_FOUND"), 404, "Not Found");
     webkit_uri_scheme_request_finish_error(request, error);
     g_error_free(error);
 #else
